@@ -279,7 +279,7 @@ function setup() {
 function cek_config(){
     if [ ! -f "${OUT_DIR}/.config" ]; then
         echo -e "${red}Error:${white} No .config file found in out directory."
-        echo "Please run '$red ./script.sh config' to generate the configuration file."
+        echo "Please run '{$red} ./script.sh config' to generate the configuration file.${white}"
         exit 1
     fi
 }
