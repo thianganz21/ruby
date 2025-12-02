@@ -276,7 +276,7 @@ function setup() {
     printf "\n${yellow}Do you want to install ksu (kernel su) for root access? (y/n): ${white}"
     read -r install_ksu
     if [[ $install_ksu == "y" || $install_ksu == "Y" ]]; then
-        printf "${green}select ksu type:\n1. kernel-su\n2. suki-su\n3. kernelsu-next\n${white}"
+        printf "${green}select ksu type:\n1. kernel-su\n2. suki-su\n3. kernelsu-next${red}(recomended)\n${white}"
         read -r ksu_type
         if [[ $ksu_type == "1" ]]; then
             echo -e "${green}Installing kernel-su...${white}"
