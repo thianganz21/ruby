@@ -295,7 +295,8 @@ function setup() {
         fi
     else
         echo -e "${yellow}Skipping ksu installation.${white}"
-    fi  
+    fi
+    echo -e "type ${cyan}All setup completed.${white} "
 }
 
 function cek_config(){
