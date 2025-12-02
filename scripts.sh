@@ -11,7 +11,7 @@ blue='\033[0;34m'
 
 
 WORK_DIR=$(pwd)
-NAME_ZIP="$(echo "$WORK_DIR"/Thian-Kernel-*.zip)"
+NAME_ZIP="$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)"
 KernelSU="default"
 OUT_DIR="${WORK_DIR}/out"
 CLANG_DIR="$WORK_DIR/myclang"
@@ -99,6 +99,12 @@ function upload_image() {
 
     [ "$UP" != "y" ] && echo "Upload cancelled." && return
 
+    ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
+    if [ ! -f "$ZIP_FILE" ]; then
+        echo -e "${red}Error:${white} please run build to generate the zip file."
+        return
+    fi
+
      # cek bot config
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${red}Error:${white} Bot configuration file not found."
@@ -117,7 +123,7 @@ function upload_image() {
     TOKEN=$(jq -r '.token' "$CONFIG_FILE")
     CHAT_ID=$(jq -r '.chat_id' "$CONFIG_FILE")
 
-    ZIP_FILE=$(echo "$WORK_DIR"/Thian-Kernel-*.zip)
+    ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
     if [ ! -f "$ZIP_FILE" ]; then
         echo -e "${red}Error:${white} zip file not found."
         return
@@ -257,14 +263,17 @@ function setup() {
 
         if [[ $clang_version == "1" ]]; then
             git clone "$URL_CLANG" "$Clang_DIR"
+            echo -e "${green}Clang clang-r530567 (19) downloaded successfully.${white}"
             break
         elif [[ $clang_version == "2" ]]; then
             git clone "$URL_CLANG2" "$Clang_DIR"
+            echo -e "${green}Clang r498229b (17.0.4) downloaded successfully.${white}"
             break
         else
             echo -e "${red}Invalid option. Please try again.${white}"
         fi
     done
+    echo -e "echo -e "${green} Clang setup completed.${white}""
 }
 
 function cek_config(){
