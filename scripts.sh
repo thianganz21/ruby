@@ -10,8 +10,6 @@ cyan='\033[0;36m'
 blue='\033[0;34m'
 
 KernelSU="default"
-
-
 WORK_DIR=$(pwd)
 CLANG_DIR="$WORK_DIR/myclang"
 SECONDS=0 # builtin bash timer
