@@ -9,18 +9,127 @@ yellow='\033[0;33m'
 cyan='\033[0;36m'
 blue='\033[0;34m'
 
-KernelSU="default"
+
 WORK_DIR=$(pwd)
+NAME_ZIP="$(echo "$WORK_DIR"/Thian-Kernel-*.zip)"
+KernelSU="default"
+OUT_DIR="${WORK_DIR}/out"
 CLANG_DIR="$WORK_DIR/myclang"
 SECONDS=0 # builtin bash timer
 DEVICE="ruby"
 ZIPNAME="Thian-Kernel-$(date '+%Y%m%d-%H%M').zip"
+
+CONFIG_DIR="${WORK_DIR}/arch/arm64/configs"
+CONFIG_BOT_TELEGRAM="${WORK_DIR}/.bot"
+CONFIG_FILE="${CONFIG_BOT_TELEGRAM}/bot_token.json"
+IMG_DIR="${OUT_DIR}/arch/arm64/boot/"
 
 export ARCH=arm64
 export KBUILD_BUILD_USER=Thian
 export KBUILD_BUILD_HOST=thianganz
 export PATH="$CLANG_DIR/bin/:$PATH"
 
+URL_CLANG="https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567.git" # clang-r530567 (19)
+URL_CLANG2="https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r498229b.git" #clang-r498229b (17.0.4)
+Clang_DIR="myclang"
+
+
+function makebot_config(){
+    echo -e "\n"
+    echo -e "${yellow} << setup bot telegram >> ${white}\n"
+    echo -e "\n"
+
+    
+    if [ ! -d "$CONFIG_BOT_TELEGRAM" ]; then
+        mkdir -p "$CONFIG_BOT_TELEGRAM"
+    fi
+
+    
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${yellow}Creating bot configuration...${white}"
+        printf "Enter your Telegram Bot Token: "
+        read BOT_TOKEN
+
+        printf "Enter your Telegram Chat ID: "
+        read CHAT_ID
+
+        cat > "$CONFIG_FILE" << EOF
+{
+    "token": "$BOT_TOKEN",
+    "chat_id": "$CHAT_ID"
+}
+EOF
+        echo -e "${green}Bot configuration saved successfully.${white}"
+
+    else
+        
+        echo -e "${yellow}Bot configuration already exists at $CONFIG_FILE.${white}"
+        printf "${yellow}Do you want to delete old config and create a new one? (y/n): ${white}"
+        read ANS
+
+        if [ "$ANS" = "y" ]; then
+            rm -f "$CONFIG_FILE"
+            echo -e "${yellow}Creating new bot configuration...${white}"
+
+            printf "Enter your Telegram Bot Token: "
+            read BOT_TOKEN
+
+            printf "Enter your Telegram Chat ID: "
+            read CHAT_ID
+
+            cat > "$CONFIG_FILE" << EOF
+{
+    "token": "$BOT_TOKEN",
+    "chat_id": "$CHAT_ID"
+}
+EOF
+
+            echo -e "${green}New bot configuration saved successfully.${white}"
+        else
+            echo -e "${green}Keeping existing configuration.${white}"
+        fi
+    fi
+
+    echo -e "\n"
+}
+
+function upload_image() {
+    printf "Are you want to upload the $NAME_ZIP? (y/n): "
+    read UP
+
+    [ "$UP" != "y" ] && echo "Upload cancelled." && return
+
+     # cek bot config
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${red}Error:${white} Bot configuration file not found."
+        echo -e "Please run '${red}./script.sh bot${white}' to set up the bot configuration."
+        printf "do you want to setup bot now? (y/n): "
+        read SETUP_BOT
+        if [[ "$SETUP_BOT" = "y" || "$SETUP_BOT" = "y" ]]; then
+            makebot_config
+        else
+            echo -e "${yellow}Upload cancelled.${white}"
+        fi
+        return
+    fi
+
+
+    TOKEN=$(jq -r '.token' "$CONFIG_FILE")
+    CHAT_ID=$(jq -r '.chat_id' "$CONFIG_FILE")
+
+    ZIP_FILE=$(echo "$WORK_DIR"/Thian-Kernel-*.zip)
+    if [ ! -f "$ZIP_FILE" ]; then
+        echo -e "${red}Error:${white} zip file not found."
+        return
+    fi
+    
+        echo -e "${yellow}Uploading $ZIP_FILE...${white}"
+        curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendDocument" \
+            -F chat_id="$CHAT_ID" \
+            -F document=@"$ZIP_FILE" > /dev/null
+        echo -e "${green}Uploaded $ZIP_FILE successfully.${white}"
+        echo -e "${green}All selected files have been uploaded.${white}"
+}
 
 
 function make_defconfig(){
@@ -122,4 +231,150 @@ function Build(){
     rm -rf AnyKernel3
     echo "[thian  Build Script] Completed in $((SECONDS / 60)) minute(s) and $((SECONDS % 60)) second(s) !"
     echo "[thian  Build Script] Zip: $ZIPNAME"
+    upload_image
 }
+
+function setup() {
+    echo -e "${yellow}Installing dependencies...${white}"
+    sudo apt-get update
+    sudo apt-get install -y zip wget gcc g++ \
+        gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+    echo -e "${green}Dependencies installed successfully.${white}"
+
+    echo -e "${green}Installing dependencies2...${white}"
+    sudo apt install -y nano bc bison ca-certificates curl flex gcc git libc6-dev \
+        libssl-dev openssl python-is-python3 ssh wget zip zstd sudo make clang \
+        gcc-arm-linux-gnueabi software-properties-common build-essential \
+        libarchive-tools gcc-aarch64-linux-gnu
+    echo -e "${green}Dependencies2 installed successfully.${white}"
+
+    while true; do
+        printf "\n${yellow}Please select clang version to download:\n"
+        printf "1. clang-r530567 (19) (recommended)\n"
+        printf "2. r498229b (17.0.4)\n${white}"
+
+        read -r clang_version
+
+        if [[ $clang_version == "1" ]]; then
+            git clone "$URL_CLANG" "$Clang_DIR"
+            break
+        elif [[ $clang_version == "2" ]]; then
+            git clone "$URL_CLANG2" "$Clang_DIR"
+            break
+        else
+            echo -e "${red}Invalid option. Please try again.${white}"
+        fi
+    done
+}
+
+function cek_config(){
+    if [ ! -f "${OUT_DIR}/.config" ]; then
+        echo -e "${red}Error:${white} No .config file found in out directory."
+        echo "Please run '$red ./script.sh config' to generate the configuration file."
+        exit 1
+    fi
+}
+
+function clean_up(){
+    echo -e "\n"
+    printf "$red are you sure want to clean up? (y/n): $white"
+    read CONFIRM
+    if [ "$CONFIRM" = "y" ]; then
+        echo -e "\n"
+        echo -e "$yellow << cleaning up build artifacts >> \n$white"
+        echo -e "\n"
+        make -C "$OUT_DIR" clean
+        echo -e "${green}Clean up completed successfully.${white}"
+    else
+        echo -e "${yellow}Clean up cancelled.${white}"
+    fi
+    echo -e "\n"
+}
+
+function full_clean_up(){
+    echo -e "\n"
+    printf "$red are you sure want to full clean up? this will delete the out directory (y/n): $white"
+    read CONFIRM
+    if [ "$CONFIRM" = "y" ]; then
+        echo -e "\n"
+        echo -e "$yellow << performing full clean up >> \n$white"
+        echo -e "\n"
+        rm -rf "$OUT_DIR"
+        echo -e "${green}Full clean up completed successfully.${white}"
+    else
+        echo -e "${yellow}Full clean up cancelled.${white}"
+    fi
+    echo -e "\n"
+
+}
+
+function cek_clang() {
+    if [ ! -f "$CLANG_DIR/bin/clang" ]; then
+        echo -e "${red}Error:${white} Clang not found at ${CLANG_DIR}."
+        echo -e "Please ensure that Clang is properly set up in the specified directory."
+        echo -e "You can download and set up Clang in the directory: $CLANG_DIR"
+        echo -e "Please extract clang tar.gz to $CLANG_DIR"
+        echo -e "Or if you use git clone, please rename the folder to 'myclang' to match the script"
+        echo -e "Or move your existing clang folder to $CLANG_DIR"
+        echo -e "run this script with setup"
+        echo -e "and try again."
+        exit 1
+    else
+        echo -e "${yellow}== Checking Clang Version ==${white}"
+        "$CLANG_DIR/bin/clang" --version
+    fi
+}
+
+
+function read_user(){
+    if [ $# -eq 0 ]; then
+        echo -e "${red}Error:${white} No arguments provided."
+        echo "Usage: $0 {setup|config|build|bot|upload|clean|fullclean}"
+        echo -e "type ${cyan}./script.sh --help${white} to get more information."
+    fi
+     case "$1" in
+        build)
+            cek_config
+            cek_clang
+            build
+            ;;
+        setup)
+            setup
+            ;;
+        bot)
+            makebot_config
+            ;;
+        upload)
+            upload_image
+            ;;
+        clean)
+            clean_up
+            ;;
+        fullclean)
+            full_clean_up
+            ;;
+        -h|--help)
+            echo -e "${cyan}Usage: $0 {build|config|upload|bot|clean|fullclean}${white}"
+            echo
+            echo -e "${green}Commands:${white}"
+            echo  -e "  ${blue}build        Build the kernel${white}"
+            echo  -e "  ${blue}config       Make and configure defconfig${white}"
+            echo  -e "  ${blue}upload       Upload built images to Telegram${white}"
+            echo  -e "  ${blue}bot          Setup Telegram bot configuration${white}"
+            echo  -e "  ${blue}clean        Clean up build artifacts${white}"
+            echo  -e "  ${blue}fullclean    Perform a full clean up of the out directory${white}"
+            echo -e "${red}note : fullclean will delete the out directory${white}"
+            echo -e "${yellow}note: run './script.sh bot' first to setup bot telegram before upload images if not cannot upload${white}"
+            echo -e "${yellow}note: run './script.sh config' first to setup kernel config before build or cannot build because no .config found${white}"
+            ;;
+        *)
+            echo -e "${red}Error:${white} Invalid argument: $1"
+            echo "Usage: $0 {build|config|upload|bot|clean|fullclean}"
+            echo -e "type ${cyan}./script.sh --help${white} to get more information."
+            exit 1
+            ;;
+    esac
+}
+
+# execute
+read_user "$@"
