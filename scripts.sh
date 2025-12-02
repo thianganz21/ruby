@@ -276,20 +276,20 @@ function setup() {
     printf "\n${yellow}Do you want to install ksu (kernel su) for root access? (y/n): ${white}"
     read -r install_ksu
     if [[ $install_ksu == "y" || $install_ksu == "Y" ]]; then
-        printf "${green}select ksu type:\n1. kernel-su\n2. kernelsu-next-ori\n3. kernelsu-next-by-DR-KernelArchive\n${white}"
+        printf "${green}select ksu type:\n1. kernel-su\n2. suki-su\n3. kernelsu-next\n${white}"
         read -r ksu_type
         if [[ $ksu_type == "1" ]]; then
             echo -e "${green}Installing kernel-su...${white}"
-            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+            curl -LSs "https://raw.githubusercontent.com/thianganz21/ksu/refs/heads/main/kernel/setup.sh" | bash -s v0.9.5
             echo -e "${red}kernel-su installed successfully.${white}"
         elif [[ $ksu_type == "2" ]]; then
-            echo -e "${green}Installing kernelsu-next-ori...${white}"
-            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-            echo -e "${red}kernelsu-next-ori installed successfully.${white}"
+            echo -e "${green}Installing sukisu...${white}"
+            curl -LSs "https://raw.githubusercontent.com/thianganz21/sksu/refs/heads/susfs/kernel/setup.sh" | bash -s susfs-main
+            echo -e "${red}sukisu installed successfully.${white}"
         elif [[ $ksu_type == "3" ]]; then
-            echo -e "${green}Installing kernelsu-next-by-DR-KernelArchive...${white}"
-            curl -LSs "https://raw.githubusercontent.com/DR-KernelArchive/KernelSU-Next/refs/heads/next/kernel/setup.sh" | bash -s next
-            echo -e "${red}kernelsu-next-by-DR-KernelArchive installed successfully.${white}"
+            echo -e "${green}Installing kernelsu-next...${white}"
+            curl -LSs "https://raw.githubusercontent.com/thianganz21/ksun/refs/heads/next/kernel/setup.sh" | bash -s next
+            echo -e "${red}kernelsu-next installed successfully.${white}"
         else
             echo -e "${red}Invalid selection. Skipping ksu installation.${white}"
         fi
