@@ -12,8 +12,14 @@ blue='\033[0;34m'
 
 WORK_DIR=$(pwd)
 NAME_ZIP="$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)"
+
 KernelSU="default"
+SUSFS="default"
+SERIAL="default"
+NETHUNTER="default"
+
 OUT_DIR="${WORK_DIR}/out"
+TMP_DIR="$WORK_DIR/.tmp"
 CLANG_DIR="$WORK_DIR/myclang"
 SECONDS=0 # builtin bash timer
 DEVICE="ruby"
@@ -23,6 +29,7 @@ CONFIG_DIR="${WORK_DIR}/arch/arm64/configs"
 CONFIG_BOT_TELEGRAM="${WORK_DIR}/.bot"
 CONFIG_FILE="${CONFIG_BOT_TELEGRAM}/bot_token.json"
 IMG_DIR="${OUT_DIR}/arch/arm64/boot/"
+KERNEL_SUPPORT_CONFIG_FILE="${TMP_DIR}/kernel_support_config.json"
 
 export ARCH=arm64
 export KBUILD_BUILD_USER=Thian
@@ -134,7 +141,6 @@ function upload_image() {
             -F chat_id="$CHAT_ID" \
             -F document=@"$ZIP_FILE" > /dev/null
         echo -e "${green}Uploaded $ZIP_FILE successfully.${white}"
-        echo -e "${green}All selected files have been uploaded.${white}"
 }
 
 
@@ -164,31 +170,59 @@ function make_defconfig(){
         if [[ $add_susfs == "y" || $add_susfs == "Y" ]]; then
             make ARCH=arm64 O=out vendor/susfs.config
             echo -e "${red}vendor/susfs.config added successfully.${white}"
+            SUSFS="enabled"
         fi
     else
         echo -e "${green}KernelSU support is disabled in the defconfig.${white}"
+        SUSFS="disabled"
     fi
     printf "\n${yellow}Do you want to add vendor/serial.config for arduino/esp32 to the defconfig? (y/n): ${white}"
     read -r add_serial
     if [[ $add_serial == "y" || $add_serial == "Y" ]]; then
         make ARCH=arm64 O=out vendor/serial.config
         echo -e "${red}vendor/serial.config added successfully.${white}"
+        SERIAL="enabled"
     else
         echo -e "${red}Skipping vendor/serial.config addition.${white}"
+        SERIAL="disabled"
     fi
-    printf "\n${yellow}Do you want to add vendor/nethunter.config for nethunter to the defconfig? (y/n): ${white}"
-    read -r add_nethunter
-    if [[ $add_nethunter == "y" || $add_nethunter == "Y" ]]; then
-        make ARCH=arm64 O=out vendor/nethunter.config
-        echo -e "${red}vendor/nethunter.config added successfully.${white}"
+    if [ "$KernelSU" == "enabled" ]; then
+        printf "\n${yellow}Do you want to add vendor/nethunter.config for nethunter support to the defconfig? (y/n): ${white}"
+        read -r add_nethunter
+        if [[ $add_nethunter == "y" || $add_nethunter == "Y" ]]; then
+            make ARCH=arm64 O=out vendor/nethunter.config
+            echo -e "${red}vendor/nethunter.config added successfully.${white}"
+            NETHUNTER="enabled"
+        else
+            echo -e "${red}Skipping vendor/nethunter.config addition.${white}"
+            NETHUNTER="disabled"
+        fi
     else
-        echo -e "${red}Skipping vendor/nethunter.config addition.${white}"
+        NETHUNTER="disabled"
     fi
     echo -e "\n"
     echo -e "${green}Defconfig setup complete.${white}"
     echo -e "\n"
     echo -e "${yellow}You can now proceed to build the kernel using ./script.sh build${white}"
+    cekout_config
 }
+
+function cekout_config(){
+    if [ ! -d "$TMP_DIR" ]; then
+        mkdir -p "$TMP_DIR"
+    fi
+    cat > "$KERNEL_SUPPORT_CONFIG_FILE" << EOF
+{
+    "KernelSU": "$KernelSU",
+    "SUSFS": "$SUSFS",
+    "Serial": "$SERIAL",
+    "NETHUNTER": "$NETHUNTER"
+}
+EOF
+}
+
+
+
 
 function Build(){
     if [[ $1 = "-mc" || $1 = "--makeconfig" || $2 = "-mc" || $2 = "--makeconfig" ]]; then
@@ -211,9 +245,16 @@ function Build(){
     CROSS_COMPILE=aarch64-linux-gnu- \
     CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
     Image.gz-dtb
+
+    zip_image
     
+    
+}
+
+function zip_image(){
+
     kernel="out/arch/arm64/boot/Image.gz-dtb"
-    
+
     if [ ! -f "$kernel" ]; then
         echo "[thian  Build Script] Compilation failed!"
         exit 1
@@ -229,9 +270,34 @@ function Build(){
             exit 1
         fi
     fi
+
     
+
     cp $kernel AnyKernel3
     cd AnyKernel3
+    
+    # Read data from $KERNEL_SUPPORT_CONFIG_FILE
+    if [ -f "$KERNEL_SUPPORT_CONFIG_FILE" ]; then
+        # Extract feature flags from JSON config file
+        KERNELSU=$(grep -o '"KernelSU": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+        SUSFS=$(grep -o '"SUSFS": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+        SERIAL=$(grep -o '"Serial": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+        NETHUNTER=$(grep -o '"NETHUNTER": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+        
+        # Build feature list - only add enabled features without the status
+        FEATURES=""
+        [ "$KERNELSU" = "enabled" ] && FEATURES+="  - KernelSU"
+        [ "$SUSFS" = "enabled" ] && FEATURES+=" - SUSFS"
+        [ "$SERIAL" = "enabled" ] && FEATURES+=" - Serial"
+        [ "$NETHUNTER" = "enabled" ] && FEATURES+=" - NetHunter"
+        
+        # Search for line containing "-*" in banner and replace with feature list
+        if grep -q "^  -\*" banner; then
+            sed -i 's/^  -\*$/'"$(echo "$FEATURES" | sed 's/[&/\]/\\&/g')"'/' banner
+        fi
+    fi
+
+    ## Set zip name
     zip -r9 "../$ZIPNAME" * -x .git
     cd ..
     rm -rf AnyKernel3
@@ -243,7 +309,7 @@ function Build(){
 function setup() {
     echo -e "${yellow}Installing dependencies...${white}"
     sudo apt-get update
-    sudo apt-get install -y zip wget gcc g++ \
+    sudo apt-get install -y zip wget jq gcc g++ \
         gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
     echo -e "${green}Dependencies installed successfully.${white}"
 
@@ -258,15 +324,16 @@ function setup() {
         printf "\n${yellow}Please select clang version to download:\n"
         printf "1. clang-r530567 (19) (recommended)\n"
         printf "2. r498229b (17.0.4)\n${white}"
+        echo -e "${yellow}Enter your choice (1/2): ${white}"
 
         read -r clang_version
 
         if [[ $clang_version == "1" ]]; then
-            git clone "$URL_CLANG" "$Clang_DIR"
+            git clone "$URL_CLANG" "$Clang_DIR" --depth 1
             echo -e "${green}Clang clang-r530567 (19) downloaded successfully.${white}"
             break
         elif [[ $clang_version == "2" ]]; then
-            git clone "$URL_CLANG2" "$Clang_DIR"
+            git clone "$URL_CLANG2" "$Clang_DIR" --depth 1
             echo -e "${green}Clang r498229b (17.0.4) downloaded successfully.${white}"
             break
         else
@@ -277,6 +344,7 @@ function setup() {
     read -r install_ksu
     if [[ $install_ksu == "y" || $install_ksu == "Y" ]]; then
         printf "${green}select ksu type:\n1. kernel-su\n2. suki-su\n3. kernelsu-next${red}(recomended)\n${white}"
+        echo -e "${yellow}Enter your choice (1/2/3): ${white}"
         read -r ksu_type
         if [[ $ksu_type == "1" ]]; then
             echo -e "${green}Installing kernel-su...${white}"
@@ -286,10 +354,12 @@ function setup() {
             echo -e "${green}Installing sukisu...${white}"
             curl -LSs "https://raw.githubusercontent.com/thianganz21/sksu/refs/heads/susfs/kernel/setup.sh" | bash -s susfs-main
             echo -e "${red}sukisu installed successfully.${white}"
+
         elif [[ $ksu_type == "3" ]]; then
             echo -e "${green}Installing kernelsu-next...${white}"
             curl -LSs "https://raw.githubusercontent.com/thianganz21/ksun/refs/heads/next/kernel/setup.sh" | bash -s next
             echo -e "${red}kernelsu-next installed successfully.${white}"
+
         else
             echo -e "${red}Invalid selection. Skipping ksu installation.${white}"
         fi
