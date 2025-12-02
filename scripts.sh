@@ -368,7 +368,7 @@ function read_user(){
         build)
             cek_config
             cek_clang
-            build
+            Build
             ;;
         config)
             make_defconfig
