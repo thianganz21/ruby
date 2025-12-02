@@ -347,6 +347,9 @@ function read_user(){
             cek_clang
             build
             ;;
+        config)
+            make_defconfig
+            ;;
         setup)
             setup
             ;;
