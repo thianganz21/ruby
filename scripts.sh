@@ -405,7 +405,48 @@ function help_menu(){
     echo -e "${yellow}note: run '${red}./script config${yellow}' first to setup kernel config before build or cannot build because no .config found${white}"
 }
 
+function upload_image() {
+    printf "Are you want to upload the $NAME_ZIP? (y/n): "
+    read UP
 
+    [ "$UP" != "y" ] && echo "Upload cancelled." && return
+
+    ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
+    if [ ! -f "$ZIP_FILE" ]; then
+        echo -e "${red}Error:${white} please run build to generate the zip file."
+        return
+    fi
+
+     # cek bot config
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${red}Error:${white} Bot configuration file not found."
+        echo -e "Please run '${red}./script.sh bot${white}' to set up the bot configuration."
+        printf "do you want to setup bot now? (y/n): "
+        read SETUP_BOT
+        if [[ "$SETUP_BOT" = "y" || "$SETUP_BOT" = "y" ]]; then
+            makebot_config
+        else
+            echo -e "${yellow}Upload cancelled.${white}"
+        fi
+        return
+    fi
+
+
+    TOKEN=$(jq -r '.token' "$CONFIG_FILE")
+    CHAT_ID=$(jq -r '.chat_id' "$CONFIG_FILE")
+
+    ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
+    if [ ! -f "$ZIP_FILE" ]; then
+        echo -e "${red}Error:${white} zip file not found."
+        return
+    fi
+    
+        echo -e "${yellow}Uploading $ZIP_FILE...${white}"
+        curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendDocument" \
+            -F chat_id="$CHAT_ID" \
+            -F document=@"$ZIP_FILE" > /dev/null
+        echo -e "${green}Uploaded $ZIP_FILE successfully.${white}"
+}
 
 function read_user(){
     if [ $# -eq 0 ]; then
