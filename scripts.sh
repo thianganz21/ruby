@@ -101,7 +101,7 @@ EOF
 }
 
 function upload_image() {
-    printf "Are you want to upload the $NAME_ZIP? (y/n): "
+    printf "Are you want to upload to telegram the $NAME_ZIP? (y/n): "
     read UP
 
     [ "$UP" != "y" ] && echo "Upload cancelled." && return
@@ -427,14 +427,34 @@ function cek_clang() {
     fi
 }
 
+function help_menu(){
+    echo -e "${cyan}Usage: $0 {setup|build|config|upload|bot|clean|fullclean}${white}"
+    echo
+    echo -e "${green}Commands:${white}"
+    echo  -e "  ${blue}build        Build the kernel${white}"
+    echo  -e "  ${blue}config       Make and configure defconfig${white}"
+    echo  -e "  ${blue}upload       Upload built images to Telegram${white}"
+    echo  -e "  ${blue}bot          Setup Telegram bot configuration${white}"
+    echo  -e "  ${blue}clean        Clean up build artifacts${white}"
+    echo  -e "  ${blue}fullclean    Perform a full clean up of the out directory${white}"
+    echo  -e "  ${blue}setup        Setup build environment and dependencies${white}"
+    echo -e "\n"
+    echo -e "${red}note : fullclean will delete the out directory${white}"
+    echo -e "\n"
+    echo -e "${green}note: run '${red}./script setup${yellow}' first to install dependencies and clang before build or cannot build${white}"
+    echo -e "${yellow}note: run '${red}./script bot${yellow}' first to setup bot telegram before upload images if not cannot upload${white}"
+    echo -e "${yellow}note: run '${red}./script config${yellow}' first to setup kernel config before build or cannot build because no .config found${white}"
+}   
+
+
 
 function read_user(){
     if [ $# -eq 0 ]; then
         echo -e "${red}Error:${white} No arguments provided."
-        echo "Usage: $0 {setup|config|build|bot|upload|clean|fullclean}"
-        echo -e "type ${cyan}./script.sh --help${white} to get more information."
+        help_menu
+        return
     fi
-     case "$1" in
+    case "$1" in
         build)
             cek_config
             cek_clang
@@ -458,24 +478,9 @@ function read_user(){
         fullclean)
             full_clean_up
             ;;
-        -h|--help)
-            echo -e "${cyan}Usage: $0 {build|config|upload|bot|clean|fullclean}${white}"
-            echo
-            echo -e "${green}Commands:${white}"
-            echo  -e "  ${blue}build        Build the kernel${white}"
-            echo  -e "  ${blue}config       Make and configure defconfig${white}"
-            echo  -e "  ${blue}upload       Upload built images to Telegram${white}"
-            echo  -e "  ${blue}bot          Setup Telegram bot configuration${white}"
-            echo  -e "  ${blue}clean        Clean up build artifacts${white}"
-            echo  -e "  ${blue}fullclean    Perform a full clean up of the out directory${white}"
-            echo -e "${red}note : fullclean will delete the out directory${white}"
-            echo -e "${yellow}note: run './script.sh bot' first to setup bot telegram before upload images if not cannot upload${white}"
-            echo -e "${yellow}note: run './script.sh config' first to setup kernel config before build or cannot build because no .config found${white}"
-            ;;
         *)
             echo -e "${red}Error:${white} Invalid argument: $1"
-            echo "Usage: $0 {build|config|upload|bot|clean|fullclean}"
-            echo -e "type ${cyan}./script.sh --help${white} to get more information."
+            help_menu
             exit 1
             ;;
     esac
