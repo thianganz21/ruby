@@ -64,10 +64,10 @@ Notes:
   run './script config' first to setup kernel config before build
 
 # 3. Build kernel
-./script setup
-./script config
-./script build
+./script.sh setup
+./script.sh config
+./script.sh build
 
 # 4. Upload (Optional)
-./script bot
-./script upload
+./script.sh bot
+./script.sh upload
