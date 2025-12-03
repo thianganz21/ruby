@@ -1,6 +1,6 @@
 # ⚡ Thian Kernel
 ### Redmi Note 12 Pro 5G — *ruby*  
-Custom kernel based on Moonwake Kernel with performance improvements, optional modules, and extended configurability.
+Custom kernel based on Moonwake Kernel with optional modules, and extended configurability.
 
 ---
 
@@ -14,7 +14,7 @@ Kernel ini dikembangkan menggunakan base source dari:
 
 ## 🔥 Highlight Features
 - Based on Moonwake Kernel (Ruby)
-- Tuned for stability, gaming, and smooth performance
+- Tuned for stability
 - Optional enhancement configs:
   - KernelSU support (optional install)
   - SUSFS mount & overlay
