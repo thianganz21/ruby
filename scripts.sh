@@ -12,7 +12,7 @@ blue='\033[0;34m'
 
 WORK_DIR=$(pwd)
 NAME_ZIP="$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)"
-
+KERNEL_SUPPORT=KernelSU-Next/kernel/setup.sh
 KernelSU="default"
 SUSFS="default"
 SERIAL="default"
@@ -45,21 +45,21 @@ function makebot_config(){
     echo -e "\n"
     echo -e "${yellow} << setup bot telegram >> ${white}\n"
     echo -e "\n"
-
+    
     
     if [ ! -d "$CONFIG_BOT_TELEGRAM" ]; then
         mkdir -p "$CONFIG_BOT_TELEGRAM"
     fi
-
+    
     
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${yellow}Creating bot configuration...${white}"
         printf "Enter your Telegram Bot Token: "
         read BOT_TOKEN
-
+        
         printf "Enter your Telegram Chat ID: "
         read CHAT_ID
-
+        
         cat > "$CONFIG_FILE" << EOF
 {
     "token": "$BOT_TOKEN",
@@ -67,134 +67,119 @@ function makebot_config(){
 }
 EOF
         echo -e "${green}Bot configuration saved successfully.${white}"
-
+        
     else
         
         echo -e "${yellow}Bot configuration already exists at $CONFIG_FILE.${white}"
         printf "${yellow}Do you want to delete old config and create a new one? (y/n): ${white}"
         read ANS
-
+        
         if [ "$ANS" = "y" ]; then
             rm -f "$CONFIG_FILE"
             echo -e "${yellow}Creating new bot configuration...${white}"
-
+            
             printf "Enter your Telegram Bot Token: "
             read BOT_TOKEN
-
+            
             printf "Enter your Telegram Chat ID: "
             read CHAT_ID
-
+            
             cat > "$CONFIG_FILE" << EOF
 {
     "token": "$BOT_TOKEN",
     "chat_id": "$CHAT_ID"
 }
 EOF
-
+            
             echo -e "${green}New bot configuration saved successfully.${white}"
         else
             echo -e "${green}Keeping existing configuration.${white}"
         fi
     fi
-
+    
     echo -e "\n"
 }
 
-function upload_image() {
-    printf "Are you want to upload to telegram the $NAME_ZIP? (y/n): "
-    read UP
-
-    [ "$UP" != "y" ] && echo "Upload cancelled." && return
-
-    ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
-    if [ ! -f "$ZIP_FILE" ]; then
-        echo -e "${red}Error:${white} please run build to generate the zip file."
-        return
-    fi
-
-     # cek bot config
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "${red}Error:${white} Bot configuration file not found."
-        echo -e "Please run '${red}./script.sh bot${white}' to set up the bot configuration."
-        printf "do you want to setup bot now? (y/n): "
-        read SETUP_BOT
-        if [[ "$SETUP_BOT" = "y" || "$SETUP_BOT" = "y" ]]; then
-            makebot_config
-        else
-            echo -e "${yellow}Upload cancelled.${white}"
-        fi
-        return
-    fi
-
-
-    TOKEN=$(jq -r '.token' "$CONFIG_FILE")
-    CHAT_ID=$(jq -r '.chat_id' "$CONFIG_FILE")
-
-    ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
-    if [ ! -f "$ZIP_FILE" ]; then
-        echo -e "${red}Error:${white} zip file not found."
-        return
-    fi
-    
-        echo -e "${yellow}Uploading $ZIP_FILE...${white}"
-        curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendDocument" \
-            -F chat_id="$CHAT_ID" \
-            -F document=@"$ZIP_FILE" > /dev/null
-        echo -e "${green}Uploaded $ZIP_FILE successfully.${white}"
-}
 
 
 function make_defconfig(){
+    echo -e "\n"
+    echo -e "\n"
     echo -e "${yellow}Setting up Thian ruby defconfig...${white}"
-    make ARCH=arm64 O=out ruby_defconfig
-    make ARCH=arm64 O=out vendor/lz4kd.config
-    make ARCH=arm64 O=out vendor/bbr.config
-    make ARCH=arm64 O=out vendor/noop.config
-    make ARCH=arm64 O=out vendor/lru.config
-    echo -e "${red}Thian ruby defconfig set up successfully.${white}"
+    echo -e "\n"
     echo -e "\n"
     printf "${yellow}Do you want to add vendor/kernelsu.config for KernelSU support to the defconfig? (y/n): ${white}"
     read -r add_kernelsu
     if [[ $add_kernelsu == "y" || $add_kernelsu == "Y" ]]; then
-        make ARCH=arm64 O=out vendor/kernelsu.config
-        echo -e "${red}vendor/kernelsu.config added successfully.${white}"
-        KernelSU="enabled"
+        if [ ! -f "$KERNEL_SUPPORT" ]; then
+            echo -e "${green}Installing kernelsu-next...${white}"
+            curl -LSs "https://raw.githubusercontent.com/thianganz21/ksun/refs/heads/next/kernel/setup.sh" | bash -s next
+            echo -e "${red}kernelsu-next installed successfully.${white}"
+            make ARCH=arm64 O=out vendor/kernelsu.config
+            echo -e "${red}kernelsu.config added successfully.${white}"
+            KernelSU="enabled"
+        else
+            echo -e "${green}KERNELSU-NEXT already exists. Skipping installation.${white}"
+        fi
     else
-        echo -e "${red}Skipping vendor/kernelsu.config addition.${white}"
+        if [  -f "$KERNEL_SUPPORT" ]; then
+            echo -e"${green}Removing kernelsu-next...${white}"
+            ./$KERNEL_SUPPORT --cleanup
+            echo -e "${red}kernelsu-next removed successfully.${white}"
+        fi
+        
+        echo -e "${red}Skipping kernelsu.config addition.${white}"
         KernelSU="disabled"
     fi
+    
+    
     if [ "$KernelSU" == "enabled" ]; then
+        
+        make ARCH=arm64 O=out ruby_defconfig
+        make ARCH=arm64 O=out vendor/lz4kd.config
+        make ARCH=arm64 O=out vendor/bbr.config
+        make ARCH=arm64 O=out vendor/noop.config
+        make ARCH=arm64 O=out vendor/lru.config
+        echo -e "${red}Thian ruby defconfig set up successfully.${white}"
+        echo -e "\n"
+        
         echo -e "${green}KernelSU support is enabled in the defconfig.${white}"
         printf "${yellow}do you want to enable SUSFS support as well? (y/n): ${white}"
         read -r add_susfs
         if [[ $add_susfs == "y" || $add_susfs == "Y" ]]; then
             make ARCH=arm64 O=out vendor/susfs.config
-            echo -e "${red}vendor/susfs.config added successfully.${white}"
+            echo -e "${red}susfs.config added successfully.${white}"
             SUSFS="enabled"
         fi
     else
         echo -e "${green}KernelSU support is disabled in the defconfig.${white}"
         SUSFS="disabled"
     fi
-    printf "\n${yellow}Do you want to add vendor/serial.config for arduino/esp32 to the defconfig? (y/n): ${white}"
-    read -r add_serial
-    if [[ $add_serial == "y" || $add_serial == "Y" ]]; then
-        make ARCH=arm64 O=out vendor/serial.config
-        echo -e "${red}vendor/serial.config added successfully.${white}"
-        SERIAL="enabled"
+    
+    if [ "$KernelSU" == "enabled" ]; then
+        printf "\n${yellow}Do you want to enable Serial over USB support for arduino/esp32  to the defconfig? (y/n): ${white}"
+        read -r add_serial
+        if [[ $add_serial == "y" || $add_serial == "Y" ]]; then
+            make ARCH=arm64 O=out vendor/serial.config
+            echo -e "${red}serial.config added successfully.${white}"
+            SERIAL="enabled"
+        else
+            echo -e "${red}Skipping serial.config addition.${white}"
+            SERIAL="disabled"
+        fi
     else
-        echo -e "${red}Skipping vendor/serial.config addition.${white}"
         SERIAL="disabled"
     fi
+
     if [ "$KernelSU" == "enabled" ]; then
-        printf "\n${yellow}Do you want to add vendor/nethunter.config for nethunter support to the defconfig? (y/n): ${white}"
+        printf "\n${yellow}Do you want to add nethunter.config for nethunter support to the defconfig? (y/n): ${white}"
         read -r add_nethunter
         if [[ $add_nethunter == "y" || $add_nethunter == "Y" ]]; then
-            make ARCH=arm64 O=out vendor/nethunter.config
-            echo -e "${red}vendor/nethunter.config added successfully.${white}"
+            make ARCH=arm64 O=out nethunter.config
+            echo -e "${red}nethunter.config added successfully.${white}"
             NETHUNTER="enabled"
         else
-            echo -e "${red}Skipping vendor/nethunter.config addition.${white}"
+            echo -e "${red}Skipping nethunter.config addition.${white}"
             NETHUNTER="disabled"
         fi
     else
@@ -245,16 +230,16 @@ function Build(){
     CROSS_COMPILE=aarch64-linux-gnu- \
     CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
     Image.gz-dtb
-
+    
     zip_image
     
     
 }
 
 function zip_image(){
-
+    
     kernel="out/arch/arm64/boot/Image.gz-dtb"
-
+    
     if [ ! -f "$kernel" ]; then
         echo "[thian  Build Script] Compilation failed!"
         exit 1
@@ -270,9 +255,9 @@ function zip_image(){
             exit 1
         fi
     fi
-
     
-
+    
+    
     cp $kernel AnyKernel3
     cd AnyKernel3
     
@@ -296,7 +281,7 @@ function zip_image(){
             sed -i 's/^  -\*$/'"$(echo "$FEATURES" | sed 's/[&/\]/\\&/g')"'/' banner
         fi
     fi
-
+    
     ## Set zip name
     zip -r9 "../$ZIPNAME" * -x .git
     cd ..
@@ -310,29 +295,29 @@ function setup() {
     echo -e "${yellow}Installing dependencies...${white}"
     sudo apt-get update
     sudo apt-get install -y zip wget jq gcc g++ \
-        gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+    gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
     echo -e "${green}Dependencies installed successfully.${white}"
-
+    
     echo -e "${green}Installing dependencies2...${white}"
     sudo apt install -y nano bc bison ca-certificates curl flex gcc git libc6-dev \
-        libssl-dev openssl python-is-python3 ssh wget zip zstd sudo make clang \
-        gcc-arm-linux-gnueabi software-properties-common build-essential \
-        libarchive-tools gcc-aarch64-linux-gnu
+    libssl-dev openssl python-is-python3 ssh wget zip zstd sudo make clang \
+    gcc-arm-linux-gnueabi software-properties-common build-essential \
+    libarchive-tools gcc-aarch64-linux-gnu
     echo -e "${green}Dependencies2 installed successfully.${white}"
-
+    
     while true; do
         printf "\n${yellow}Please select clang version to download:\n"
         printf "1. clang-r530567 (19) (recommended)\n"
         printf "2. r498229b (17.0.4)\n${white}"
         echo -e "${yellow}Enter your choice (1/2): ${white}"
-
+        
         read -r clang_version
-
+        
         if [[ $clang_version == "1" ]]; then
             git clone "$URL_CLANG" "$Clang_DIR" --depth 1
             echo -e "${green}Clang clang-r530567 (19) downloaded successfully.${white}"
             break
-        elif [[ $clang_version == "2" ]]; then
+            elif [[ $clang_version == "2" ]]; then
             git clone "$URL_CLANG2" "$Clang_DIR" --depth 1
             echo -e "${green}Clang r498229b (17.0.4) downloaded successfully.${white}"
             break
@@ -340,32 +325,6 @@ function setup() {
             echo -e "${red}Invalid option. Please try again.${white}"
         fi
     done
-    printf "\n${yellow}Do you want to install ksu (kernel su) for root access? (y/n): ${white}"
-    read -r install_ksu
-    if [[ $install_ksu == "y" || $install_ksu == "Y" ]]; then
-        printf "${green}select ksu type:\n1. kernel-su\n2. suki-su\n3. kernelsu-next${red}(recomended)\n${white}"
-        echo -e "${yellow}Enter your choice (1/2/3): ${white}"
-        read -r ksu_type
-        if [[ $ksu_type == "1" ]]; then
-            echo -e "${green}Installing kernel-su...${white}"
-            curl -LSs "https://raw.githubusercontent.com/thianganz21/ksu/refs/heads/main/kernel/setup.sh" | bash -s v0.9.5
-            echo -e "${red}kernel-su installed successfully.${white}"
-        elif [[ $ksu_type == "2" ]]; then
-            echo -e "${green}Installing sukisu...${white}"
-            curl -LSs "https://raw.githubusercontent.com/thianganz21/sksu/refs/heads/susfs/kernel/setup.sh" | bash -s susfs-main
-            echo -e "${red}sukisu installed successfully.${white}"
-
-        elif [[ $ksu_type == "3" ]]; then
-            echo -e "${green}Installing kernelsu-next...${white}"
-            curl -LSs "https://raw.githubusercontent.com/thianganz21/ksun/refs/heads/next/kernel/setup.sh" | bash -s next
-            echo -e "${red}kernelsu-next installed successfully.${white}"
-
-        else
-            echo -e "${red}Invalid selection. Skipping ksu installation.${white}"
-        fi
-    else
-        echo -e "${yellow}Skipping ksu installation.${white}"
-    fi
     echo -e "type ${cyan}All setup completed.${white} "
 }
 
@@ -407,7 +366,7 @@ function full_clean_up(){
         echo -e "${yellow}Full clean up cancelled.${white}"
     fi
     echo -e "\n"
-
+    
 }
 
 function cek_clang() {
@@ -444,7 +403,7 @@ function help_menu(){
     echo -e "${green}note: run '${red}./script setup${yellow}' first to install dependencies and clang before build or cannot build${white}"
     echo -e "${yellow}note: run '${red}./script bot${yellow}' first to setup bot telegram before upload images if not cannot upload${white}"
     echo -e "${yellow}note: run '${red}./script config${yellow}' first to setup kernel config before build or cannot build because no .config found${white}"
-}   
+}
 
 
 
@@ -459,30 +418,30 @@ function read_user(){
             cek_config
             cek_clang
             Build
-            ;;
+        ;;
         config)
             make_defconfig
-            ;;
+        ;;
         setup)
             setup
-            ;;
+        ;;
         bot)
             makebot_config
-            ;;
+        ;;
         upload)
             upload_image
-            ;;
+        ;;
         clean)
             clean_up
-            ;;
+        ;;
         fullclean)
             full_clean_up
-            ;;
+        ;;
         *)
             echo -e "${red}Error:${white} Invalid argument: $1"
             help_menu
             exit 1
-            ;;
+        ;;
     esac
 }
 
