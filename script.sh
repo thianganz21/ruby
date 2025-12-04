@@ -665,7 +665,7 @@ EOF
                     set="full clean complete"
                     fullclean=1
                     full_clean_up1="full clean completed"
-                    rm KERNEL_SUPPORT_CONFIG_FILE
+                    rm -f "$KERNEL_SUPPORT_CONFIG_FILE"
                 fi
             ;;
             6)
