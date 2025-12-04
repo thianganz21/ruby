@@ -197,7 +197,7 @@ function make_defconfig(){
     if [ "$KernelSU" == "disabled" ]; then
         make ARCH=arm64 O=out ruby_defconfig
         echo -e "${red}Thian ruby defconfig set up successfully.${white}"
-        if
+        
     fi
     echo -e "\n"
     echo -e "${green}Defconfig setup complete.${white}"
