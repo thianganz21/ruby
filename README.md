@@ -45,29 +45,4 @@ Kernel ini dikembangkan menggunakan base source dari:
 git clone https://github.com/yourrepo/thian-ruby-kernel.git --depth=1
 cd thian-ruby-kernel
 
-# 2. Usage Script
-Usage: ./script {setup|build|config|upload|bot|clean|fullclean}
-
-Commands:
-  build        Build the kernel
-  config       Make and configure defconfig
-  upload       Upload built images to Telegram
-  bot          Setup Telegram bot configuration
-  clean        Clean up build artifacts
-  fullclean    Perform a full clean up of the out directory
-  setup        Setup build environment and dependencies
-
-Notes:
-  fullclean will delete the out directory
-  run './script setup' first to install dependencies & clang before build
-  run './script bot'   first to setup telegram bot before upload
-  run './script config' first to setup kernel config before build
-
-# 3. Build kernel
-./script.sh setup
-./script.sh config
-./script.sh build
-
-# 4. Upload (Optional)
-./script.sh bot
-./script.sh upload
+run ./script.sh

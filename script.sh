@@ -8,6 +8,7 @@ white='\033[0m'
 yellow='\033[0;33m'
 cyan='\033[0;36m'
 blue='\033[0;34m'
+reset='\e[0m'
 
 
 WORK_DIR=$(pwd)
@@ -39,6 +40,11 @@ export PATH="$CLANG_DIR/bin/:$PATH"
 URL_CLANG="https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567.git" # clang-r530567 (19)
 URL_CLANG2="https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r498229b.git" #clang-r498229b (17.0.4)
 Clang_DIR="myclang"
+
+###
+STATE_FILE="${WORK_DIR}/.tmp/menu_state.conf"
+CONFIGS="${WORK_DIR}/out/.config"
+
 
 
 function makebot_config(){
@@ -120,6 +126,9 @@ function make_defconfig(){
             KernelSU="enabled"
         else
             echo -e "${green}KERNELSU-NEXT already exists. Skipping installation.${white}"
+            make ARCH=arm64 O=out vendor/kernelsu.config
+            echo -e "${red}kernelsu.config added successfully.${white}"
+            KernelSU="enabled"
         fi
     else
         if [  -f "$KERNEL_SUPPORT" ]; then
@@ -170,7 +179,7 @@ function make_defconfig(){
     else
         SERIAL="disabled"
     fi
-
+    
     if [ "$KernelSU" == "enabled" ]; then
         printf "\n${yellow}Do you want to add nethunter.config for nethunter support to the defconfig? (y/n): ${white}"
         read -r add_nethunter
@@ -184,6 +193,10 @@ function make_defconfig(){
         fi
     else
         NETHUNTER="disabled"
+    fi
+    if [ "$KernelSU" == "disabled" ]; then
+        make ARCH=arm64 O=out ruby_defconfig
+        echo -e "${red}Thian ruby defconfig set up successfully.${white}"
     fi
     echo -e "\n"
     echo -e "${green}Defconfig setup complete.${white}"
@@ -386,38 +399,21 @@ function cek_clang() {
     fi
 }
 
-function help_menu(){
-    echo -e "${cyan}Usage: $0 {setup|build|config|upload|bot|clean|fullclean}${white}"
-    echo
-    echo -e "${green}Commands:${white}"
-    echo  -e "  ${blue}build        Build the kernel${white}"
-    echo  -e "  ${blue}config       Make and configure defconfig${white}"
-    echo  -e "  ${blue}upload       Upload built images to Telegram${white}"
-    echo  -e "  ${blue}bot          Setup Telegram bot configuration${white}"
-    echo  -e "  ${blue}clean        Clean up build artifacts${white}"
-    echo  -e "  ${blue}fullclean    Perform a full clean up of the out directory${white}"
-    echo  -e "  ${blue}setup        Setup build environment and dependencies${white}"
-    echo -e "\n"
-    echo -e "${red}note : fullclean will delete the out directory${white}"
-    echo -e "\n"
-    echo -e "${green}note: run '${red}./script setup${yellow}' first to install dependencies and clang before build or cannot build${white}"
-    echo -e "${yellow}note: run '${red}./script bot${yellow}' first to setup bot telegram before upload images if not cannot upload${white}"
-    echo -e "${yellow}note: run '${red}./script config${yellow}' first to setup kernel config before build or cannot build because no .config found${white}"
-}
+
 
 function upload_image() {
     printf "Are you want to upload the $NAME_ZIP? (y/n): "
     read UP
-
+    
     [ "$UP" != "y" ] && echo "Upload cancelled." && return
-
+    
     ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
     if [ ! -f "$ZIP_FILE" ]; then
         echo -e "${red}Error:${white} please run build to generate the zip file."
         return
     fi
-
-     # cek bot config
+    
+    # cek bot config
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${red}Error:${white} Bot configuration file not found."
         echo -e "Please run '${red}./script.sh bot${white}' to set up the bot configuration."
@@ -430,61 +426,277 @@ function upload_image() {
         fi
         return
     fi
-
-
+    
+    
     TOKEN=$(jq -r '.token' "$CONFIG_FILE")
     CHAT_ID=$(jq -r '.chat_id' "$CONFIG_FILE")
-
+    
     ZIP_FILE=$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)
     if [ ! -f "$ZIP_FILE" ]; then
         echo -e "${red}Error:${white} zip file not found."
         return
     fi
     
-        echo -e "${yellow}Uploading $ZIP_FILE...${white}"
-        curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendDocument" \
-            -F chat_id="$CHAT_ID" \
-            -F document=@"$ZIP_FILE" > /dev/null
-        echo -e "${green}Uploaded $ZIP_FILE successfully.${white}"
+    echo -e "${yellow}Uploading $ZIP_FILE...${white}"
+    curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendDocument" \
+    -F chat_id="$CHAT_ID" \
+    -F document=@"$ZIP_FILE" > /dev/null
+    echo -e "${green}Uploaded $ZIP_FILE successfully.${white}"
 }
 
-function read_user(){
-    if [ $# -eq 0 ]; then
-        echo -e "${red}Error:${white} No arguments provided."
-        help_menu
-        return
+function menu(){
+    kernel_sup=" "
+    SET="default"
+    kernel="out/arch/arm64/boot/Image.gz-dtb"
+    confix="${WORK_DIR}/out/.config"
+    build_name=$NAME_ZIP
+    clean_up1=" "
+    full_clean_up1=" "
+    if [ ! -d "$TMP_DIR" ]; then
+        mkdir -p "$TMP_DIR"
     fi
-    case "$1" in
-        build)
-            cek_config
-            cek_clang
-            Build
-        ;;
-        config)
-            make_defconfig
-        ;;
-        setup)
-            setup
-        ;;
-        bot)
-            makebot_config
-        ;;
-        upload)
-            upload_image
-        ;;
-        clean)
-            clean_up
-        ;;
-        fullclean)
-            full_clean_up
-        ;;
-        *)
-            echo -e "${red}Error:${white} Invalid argument: $1"
-            help_menu
-            exit 1
-        ;;
-    esac
-}
+    if [[ ! -f "$STATE_FILE" ]]; then
+        echo "env=0" > "$STATE_FILE"
+        echo "defconfig=0" >> "$STATE_FILE"
+        echo "build=0" >> "$STATE_FILE"
+        echo "clean=0" >> "$STATE_FILE"
+        echo "fullclean=0" >> "$STATE_FILE"
+        echo "bot=0" >> "$STATE_FILE"
+    fi
+    source "$STATE_FILE"
+    mark() { [[ $1 -eq 1 ]] && echo "[${green}✔${white}]" || echo "[❌${white}]"; }
+    save_state(){
+        cat <<EOF > "$STATE_FILE"
+env=$env
+defconfig=$defconfig
+build=$build
+clean=$clean
+fullclean=$fullclean
+bot=$bot
+EOF
+    }
+    toggle(){
+        case $1 in
+            env) env=$((1 - env)) ;;
+            defconfig) defconfig=$((1 - defconfig)) ;;
+            build) build=$((1 - build)) ;;
+            clean) clean=$((1 - clean)) ;;
+            fullclean) fullclean=$((1 - fullclean)) ;;
+            bot) bot=$((1 - bot)) ;;
+        esac
+        save_state
+    }
+    while true; do
+        if [ ! -f "$CONFIG_FILE" ]; then
+            bot=0
+            else
+            bot=1
+        fi
+        if [ ! -f "$CLANG_DIR/bin/clang" ]; then
+            env=0
+            else
+            env=1
+        fi
+        if [ ! -f "$CONFIGS" ]; then
+            defconfig=0
+            kernel_sup="configuration not set"
+            else
+            defconfig=1
+        fi
+        if [ ! -f "$kernel" ]; then
+            build=0
+            clean=0
+            build_name="${red}no build found${white}"
+            clean_up1="${red}no build found${white}"
+          else
+            build=1
+            build_name=$NAME_ZIP
+            clean=1
+            clean_up1=$kernel
+        fi
+        if [ -f "$KERNEL_SUPPORT_CONFIG_FILE" ]; then
+            # Extract feature flags from JSON config file
+            KERNELSU=$(grep -o '"KernelSU": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+            SUSFS=$(grep -o '"SUSFS": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+            Serial=$(grep -o '"Serial": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+            NETHUNTER=$(grep -o '"NETHUNTER": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
+            
+            kernel_sup="(KernelSU: $KERNELSU, SUSFS: $SUSFS, Serial: $Serial, NETHUNTER: $NETHUNTER)"
+         else
+            kernel_sup="configuration not set"
+        fi
+        if [ ! -f "$confix" ]; then
+            full_clean_up1="${red}no config found${white}"
+            fullclean=0
+            else
+            full_clean_up1="${green}config found${white}"
+            fullclean=1
+            
+        fi
 
-# execute
-read_user "$@"
+
+        clear
+        printf "${blue}"
+        printf "RRRRRRRRRRRRRRRRR   UUUUUUUU     UUUUUUUUBBBBBBBBBBBBBBBBB   YYYYYYY       YYYYYYY\n"
+        printf "R::::::::::::::::R  U::::::U     U::::::UB::::::::::::::::B  Y:::::Y       Y:::::Y\n"
+        printf "R::::::RRRRRR:::::R U::::::U     U::::::UB::::::BBBBBB:::::B Y:::::Y       Y:::::Y\n"
+        printf "RR:::::R     R:::::RUU:::::U     U:::::UUBB:::::B     B:::::BY::::::Y     Y::::::Y\n"
+        printf "  R::::R     R:::::R U:::::U     U:::::U   B::::B     B:::::BYYY:::::Y   Y:::::YYY\n"
+        printf "  R::::R     R:::::R U:::::D     D:::::U   B::::B     B:::::B   Y:::::Y Y:::::Y   \n"
+        printf "  R::::RRRRRR:::::R  U:::::D     D:::::U   B::::BBBBBB:::::B     Y:::::Y:::::Y    \n"
+        printf "  R:::::::::::::RR   U:::::D     D:::::U   B:::::::::::::BB       Y:::::::::Y     \n"
+        printf "  R::::RRRRRR:::::R  U:::::D     D:::::U   B::::BBBBBB:::::B       Y:::::::Y      \n"
+        printf "  R::::R     R:::::R U:::::D     D:::::U   B::::B     B:::::B       Y:::::Y       \n"
+        printf "  R::::R     R:::::R U:::::D     D:::::U   B::::B     B:::::B       Y:::::Y       \n"
+        printf "  R::::R     R:::::R U::::::U   U::::::U   B::::B     B:::::B       Y:::::Y       \n"
+        printf "RR:::::R     R:::::R U:::::::UUU:::::::U BB:::::BBBBBB::::::B       Y:::::Y       \n"
+        printf "R::::::R     R:::::R  UU:::::::::::::UU  B:::::::::::::::::B     YYYY:::::YYYY    \n"
+        printf "R::::::R     R:::::R    UU:::::::::UU    B::::::::::::::::B      Y:::::::::::Y    \n"
+        printf "RRRRRRRR     RRRRRRR      UUUUUUUUU      BBBBBBBBBBBBBBBBB       YYYYYYYYYYYYY    \n"
+        printf "################################################################################\n"
+        printf "\t      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+        printf "\t      |         T H I A N   K E R N E L   B U I L D E R |\n"
+        printf "\t      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+        printf "${reset}"
+        printf "\n"
+        echo -e "${yellow}1.${white} Setup Environment              $(mark $env) "
+        echo -e "${yellow}2.${white} Configure Defconfig            $(mark $defconfig)  ${kernel_sup}"
+        echo -e "${yellow}3.${white} Build Kernel                   $(mark $build)      ${build_name}"
+        echo -e "${yellow}4.${white} Clean Build Artifacts          $(mark $clean)      ${clean_up1}"
+        echo -e "${yellow}5.${white} Full Clean Build Artifacts     $(mark $fullclean)      ${full_clean_up1}"
+        echo -e "${yellow}6.${white} Setup Bot Telegram             $(mark $bot)"
+        echo -e "${yellow}7.${white} Upload Kernel Zip to Telegram"
+        echo -e "${yellow}0.${white} Exit"
+
+        #add notes
+        echo -e "\n${cyan}Notes:${white}"
+        echo -e "${cyan}- Make sure to setup environment and defconfig before building the kernel.${white}"
+        echo -e "${cyan}- You can clean build artifacts or perform a full clean if needed.${white}"
+        echo -e "${cyan}- Setup bot telegram to upload the kernel zip after build.${white}"
+
+        printf "\n${cyan}Select an option (0-7): ${white}"
+        read -r choice
+        case $choice in
+            1)
+                toggle env
+                if [ ! -f "$CLANG_DIR/bin/clang" ]; then
+                    setup
+                    set="setup environment complete"
+                    env=1
+                else
+                    printf "${yellow}Clang is already installed. Do you want to reinstall it? (y/n): ${white}"
+                    read -r reinstall_clang
+                    if [[ $reinstall_clang == "y" || $reinstall_clang == "Y" ]]; then
+                        rm -rf "$CLANG_DIR"
+                        setup
+                        set="reinstall environment complete"
+                        env=1
+                    else
+                        env=1
+                    fi
+                    
+                fi
+            ;;
+            2)
+                if [ ! -f "$CONFIGS" ]; then
+                    make_defconfig
+                    set="defconfig setup complete"
+                    defconfig=1
+                else
+                    printf "${yellow}Defconfig already exists. Do you want to regenerate it? (y/n): ${white}"
+                    read -r regen_defconfig
+                    if [[ $regen_defconfig == "y" || $regen_defconfig == "Y" ]]; then
+                        rm -f "$CONFIGS"
+                        make_defconfig
+                        set="defconfig regenerated successfully"
+                        defconfig=1
+                    else
+                        defconfig=1
+                    fi
+                fi
+            ;;
+            3)
+                if [ ! -f "$CONFIGS" ]; then
+                    echo -e "${red}Error:${white} No .config file found. Please configure defconfig first."
+                    set="build failed: no defconfig"
+                    build=0
+                else
+                    if [ ! -f "$CLANG_DIR/bin/clang" ]; then
+                        echo -e "${red}Error:${white} Clang not found. Please set up the environment first."
+                        set="build failed: no clang"
+                        build=0
+                        else
+                        #cek NAME_ZIP
+                        if [ -f "$WORK_DIR"/Thian-Kernel-*.zip ]; then
+                            rm -f "$WORK_DIR"/Thian-Kernel-*.zip
+                            cek_clang
+                            Build
+                            set="build complete"
+                            build=1
+                            else
+                            cek_clang
+                            Build
+                            set="build complete"
+                            build=1
+                        fi
+                        
+                    fi
+                    
+                fi
+            ;;
+            4)
+                if [ ! -f "$kernel" ]; then
+                    echo -e "${red}Error:${white} No build found to clean."
+                    set="clean failed: no build found"
+                    clean=0
+                else
+                    clean_up
+                    set="clean complete"
+                    clean=1
+                    clean_up1="clean completed"
+                fi
+            ;;
+            5)
+                if [ ! -d "$OUT_DIR" ]; then
+                    echo -e "${red}Error:${white} No out directory found to full clean."
+                    set="full clean failed: no out directory"
+                    fullclean=0
+                else
+                    full_clean_up
+                    set="full clean complete"
+                    fullclean=1
+                    full_clean_up1="full clean completed"
+                    rm KERNEL_SUPPORT_CONFIG_FILE
+                fi
+            ;;
+            6)
+                if [ ! -f "$CONFIG_FILE" ]; then
+                    
+                    toggle bot
+                    makebot_config
+                    set="bot setup complete"
+                else
+                    bot=1
+                    makebot_config
+                fi
+            ;;
+            7)
+                echo -e "${yellow}Upload Kernel Zip to Telegram...${white}"
+                upload_image
+                set="upload complete"
+            ;;
+            0)
+                echo -e "${yellow}Exiting...${white}"
+                exit 0
+            ;;
+            *)
+                echo -e "${red}Invalid option. Please try again.${white}"
+            ;;
+        esac
+        printf "\n${cyan}${set}\n\nPress Enter to continue...${white}"
+        read -r
+    done
+    
+    
+}
+menu
