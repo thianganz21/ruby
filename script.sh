@@ -274,28 +274,28 @@ function zip_image(){
     cp $kernel AnyKernel3
     cd AnyKernel3
     
-    # Read data from $KERNEL_SUPPORT_CONFIG_FILE
+   
     if [ -f "$KERNEL_SUPPORT_CONFIG_FILE" ]; then
-        # Extract feature flags from JSON config file
+        
         KERNELSU=$(grep -o '"KernelSU": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
         SUSFS=$(grep -o '"SUSFS": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
         SERIAL=$(grep -o '"Serial": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
         NETHUNTER=$(grep -o '"NETHUNTER": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
         
-        # Build feature list - only add enabled features without the status
+        
         FEATURES=""
         [ "$KERNELSU" = "enabled" ] && FEATURES+="  - KernelSU"
         [ "$SUSFS" = "enabled" ] && FEATURES+=" - SUSFS"
         [ "$SERIAL" = "enabled" ] && FEATURES+=" - Serial"
         [ "$NETHUNTER" = "enabled" ] && FEATURES+=" - NetHunter"
         
-        # Search for line containing "-*" in banner and replace with feature list
+        
         if grep -q "^  -\*" banner; then
             sed -i 's/^  -\*$/'"$(echo "$FEATURES" | sed 's/[&/\]/\\&/g')"'/' banner
         fi
     fi
     
-    ## Set zip name
+   
     zip -r9 "../$ZIPNAME" * -x .git
     cd ..
     rm -rf AnyKernel3
@@ -413,7 +413,7 @@ function upload_image() {
         return
     fi
     
-    # cek bot config
+   
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${red}Error:${white} Bot configuration file not found."
         echo -e "Please run '${red}./script.sh bot${white}' to set up the bot configuration."
@@ -515,7 +515,7 @@ EOF
             clean_up1=$kernel
         fi
         if [ -f "$KERNEL_SUPPORT_CONFIG_FILE" ]; then
-            # Extract feature flags from JSON config file
+           
             KERNELSU=$(grep -o '"KernelSU": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
             SUSFS=$(grep -o '"SUSFS": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
             Serial=$(grep -o '"Serial": *"[^"]*"' "$KERNEL_SUPPORT_CONFIG_FILE" | cut -d'"' -f4)
@@ -568,7 +568,7 @@ EOF
         echo -e "${yellow}7.${white} Upload Kernel Zip to Telegram"
         echo -e "${yellow}0.${white} Exit"
 
-        #add notes
+
         echo -e "\n${cyan}Notes:${white}"
         echo -e "${cyan}- Make sure to setup environment and defconfig before building the kernel.${white}"
         echo -e "${cyan}- You can clean build artifacts or perform a full clean if needed.${white}"
@@ -626,7 +626,6 @@ EOF
                         set="build failed: no clang"
                         build=0
                         else
-                        #cek NAME_ZIP
                         if [ -f "$WORK_DIR"/Thian-Kernel-*.zip ]; then
                             rm -f "$WORK_DIR"/Thian-Kernel-*.zip
                             cek_clang
