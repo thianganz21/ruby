@@ -14,6 +14,7 @@ reset='\e[0m'
 WORK_DIR=$(pwd)
 NAME_ZIP="$(ls "$WORK_DIR"/Thian-Kernel-*.zip 2>/dev/null | head -n 1)"
 KERNEL_SUPPORT=KernelSU-Next/kernel/setup.sh
+KERNEL_SUPPORT2=KernelSU/kernel/setup.sh
 KernelSU="default"
 SUSFS="default"
 SERIAL="default"
@@ -116,24 +117,57 @@ function make_defconfig(){
     echo -e "\n"
     printf "${yellow}Do you want to add vendor/kernelsu.config for KernelSU support to the defconfig? (y/n): ${white}"
     read -r add_kernelsu
+    KERNELSU_FOUND=false
     if [[ $add_kernelsu == "y" || $add_kernelsu == "Y" ]]; then
-        if [ ! -f "$KERNEL_SUPPORT" ]; then
-            echo -e "${green}Installing kernelsu-next...${white}"
-            curl -LSs "https://raw.githubusercontent.com/thianganz21/ksun/refs/heads/next/kernel/setup.sh" | bash -s next
-            echo -e "${red}kernelsu-next installed successfully.${white}"
+        for FILE in "$KERNEL_SUPPORT" "$KERNEL_SUPPORT2"; do
+            if [ -f "$FILE" ]; then
+                KERNELSU_FOUND=true
+                break
+            fi
+        done
+        if $KERNELSU_FOUND; then
+            echo -e "${green}KernelSU already exists. Skipping installation.${white}"
             make ARCH=arm64 O=out vendor/kernelsu.config
             echo -e "${red}kernelsu.config added successfully.${white}"
             KernelSU="enabled"
-        else
-            echo -e "${green}KERNELSU-NEXT already exists. Skipping installation.${white}"
+            else
+            echo -e "${green}Installing kernelsu-next...${white}"
+            echo -e "${green}Please select kernesu type...${white}"
+            printf "${yellow}1. KernelSU(no susfs)\n2. KernelSU(susfs)\n3. SukiSU-Ultra\nEnter your choice (1-3): ${white}"
+            read -r ks_choice
+            case $ks_choice in
+                1)
+                     curl -LSs "https://raw.githubusercontent.com/thianganz21/KernelSU/main/kernel/setup.sh" | bash -s main
+                    ;;
+                2)
+                     curl -LSs "https://raw.githubusercontent.com/thianganz21/KernelSU/main/kernel/setup.sh" | bash -s susfs-rksu-master
+                    ;;
+                3)
+                     curl -LSs "https://github.com/DeepinRain/SukiSU-Ultra/raw/susfs/kernel/setup.sh" | bash -s susfs
+                    ;;
+                *)
+                    echo -e "${red}Invalid choice. Abort.${white}"
+                    exit 1
+                    ;;
+            esac
             make ARCH=arm64 O=out vendor/kernelsu.config
             echo -e "${red}kernelsu.config added successfully.${white}"
             KernelSU="enabled"
         fi
+
+
     else
         if [  -f "$KERNEL_SUPPORT" ]; then
             echo -e"${green}Removing kernelsu-next...${white}"
-            ./$KERNEL_SUPPORT --cleanup
+            bash $KERNEL_SUPPORT --cleanup
+            echo -e "${red}kernelsu-next removed successfully.${white}"
+        fi
+        
+        echo -e "${red}Skipping kernelsu.config addition.${white}"
+        KernelSU="disabled"
+        if [  -f "$KERNEL_SUPPORT2" ]; then
+            echo -e"${green}Removing kernelsu-next...${white}"
+            bash $KERNEL_SUPPORT2 --cleanup
             echo -e "${red}kernelsu-next removed successfully.${white}"
         fi
         
