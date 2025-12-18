@@ -66,7 +66,7 @@ static int seq_show(struct seq_file *m, void *v)
 	}
 	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\n",
 			(long long)file->f_pos, f_flags,
-			mnt->mnt_id);
+			 mnt->mnt_id);
 #else
 	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\n",
 		   (long long)file->f_pos, f_flags,
